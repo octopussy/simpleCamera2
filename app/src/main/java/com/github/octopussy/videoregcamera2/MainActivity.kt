@@ -135,12 +135,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startOpenCamera() {
-        val cameraId = cameraManager.cameraIdList.first()
         if (cameraDevice != null) {
             //pendingOpenCameraInfo = camera
             closeCamera()
         } else {
-            openCamera(cameraId)
+            openCamera(cameraInfos.find { it.isBack }!!)
         }
     }
 
@@ -205,7 +204,10 @@ class MainActivity : AppCompatActivity() {
 
                     override fun onConfigured(session: CameraCaptureSession) {
                         captureSession = session
-                        Log.v(TAG, "startPreview ${this@MainActivity.cameraInfo} ${this@MainActivity.cameraDevice}")
+                        Log.v(
+                            TAG,
+                            "startPreview ${this@MainActivity.cameraInfo} ${this@MainActivity.cameraDevice}"
+                        )
                         try {
                             // val range = getCurrentCameraFpsRange() ?: FpsRange(30, 30)
                             requestBuilder =
@@ -232,20 +234,8 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                imageReader = ImageReader.newInstance(
-                    1920,
-                    1080,
-                    ImageFormat.JPEG,
-                    1
-                ).apply {
-                    setOnImageAvailableListener({
-                        val path = getExternalFilesDir(Environment.DIRECTORY_DCIM)
-                        val file = File(path, UUID.randomUUID().toString() + ".jpg")
-                        cameraHandler?.post(ImageSaver(it.acquireNextImage(), file))
-                    }, null)
-                }
+                createImageReader()
 
-                // Открываем новую сессию с камерой
                 try {
                     val surfaceList: MutableList<Surface> = ArrayList()
                     surfaceList.add(previewSurface!!)
@@ -259,10 +249,6 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: java.lang.Exception) {
                     Log.e(TAG, Log.getStackTraceString(e))
                 }
-
-                //notifyBaseStateUpdate()
-
-                // setStatus(com.wmspanel.backgroundcamera.BgCameraService.BgCameraNotification.NOTIFICATION_STATUS.CAMERA_OPENED)
             }
 
             override fun onClosed(camera: CameraDevice) {
@@ -280,22 +266,33 @@ class MainActivity : AppCompatActivity() {
                 Log.v(TAG, "onDisconnected")
                 captureSession = null
                 //stopSafe()
-
             }
 
             override fun onError(camera: CameraDevice, error: Int) {
-                Log.v(TAG, "onError, error=$error")
+                Log.v(TAG, "onError $error")
             }
         }
 
         cameraHandler?.post {
             try {
-                cameraManager.openCamera(cameraId, cameraStateCallback, cameraHandler)
+                cameraManager.openCamera(cameraInfo.id, cameraStateCallback, cameraHandler)
             } catch (e: SecurityException) {
                 Log.e(TAG, Log.getStackTraceString(e))
             } catch (e: Exception) {
                 Log.e(TAG, Log.getStackTraceString(e))
             }
+        }
+    }
+
+    private fun createImageReader() {
+        val imageWidth = 1920
+        val imageHeight = 1080
+        imageReader = ImageReader.newInstance(imageWidth, imageHeight, ImageFormat.JPEG, 1).apply {
+            setOnImageAvailableListener({
+                val path = getExternalFilesDir(Environment.DIRECTORY_DCIM)
+                val file = File(path, UUID.randomUUID().toString() + ".jpg")
+                cameraHandler?.post(ImageSaver(it.acquireNextImage(), file))
+            }, null)
         }
     }
 
@@ -334,7 +331,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-///sdcard/Android/data/com.github.octopussy.videoregcamera2/files/DCIM/39626525-784c-4db1-9ad3-456ff7d1f239.jpg
     private inner class ImageSaver(val image: Image, val file: File) : Runnable {
 
         override fun run() {
